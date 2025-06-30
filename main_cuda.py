@@ -1,9 +1,10 @@
+
 from __future__ import annotations
 import torch
 import os
 import pickle
 
-def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint.pth"):
+def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint_cuda.pth"):
     torch.save({
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
@@ -12,14 +13,13 @@ def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint.p
     with open(path + ".tokenizer", "wb") as f:
         pickle.dump(tokenizer, f)
 
-def load_checkpoint(model, optimizer, path="checkpoint.pth"):
-    checkpoint = torch.load(path)
+def load_checkpoint(model, optimizer, path="checkpoint_cuda.pth", map_location=None):
+    checkpoint = torch.load(path, map_location=map_location)
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
     with open(path + ".tokenizer", "rb") as f:
         tokenizer = pickle.load(f)
     return tokenizer, checkpoint["num_batches"]
-
 
 if __name__ == '__main__':
     import torch
@@ -29,8 +29,12 @@ if __name__ == '__main__':
     import data
     import lm
 
+    # Device selection
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
     seq_len = 128
-    batch_size = 64
+    batch_size = 32
     data_path = "data/"
     n_layers = 12
     n_heads = 12
@@ -42,7 +46,7 @@ if __name__ == '__main__':
 
     num_batches_to_train = 50000
 
-    dropout = 0.1  # <-- Add dropout value
+    dropout = 0.1
 
     tokenizer, tokenized_data = data.load_data(data_path)
     data_iter = iter(data.RandomOrderDataIterator(tokenized_data, seq_len + 1))
@@ -55,17 +59,17 @@ if __name__ == '__main__':
         tokenizer.vocab_size(),
         mlp_hidden_size,
         with_residuals=True,
-        dropout=dropout,  # <-- Pass dropout
-    )
+        dropout=dropout,
+    ).to(device)  # Move model to device
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, betas=[0.9, 0.95], weight_decay=0.01)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5000, gamma=0.5)  # Step down LR every 5000 batches
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5000, gamma=0.5)
 
-    checkpoint_path = "checkpoint.pth"
+    checkpoint_path = "checkpoint_cuda.pth"
     start_batch = 0
 
     if os.path.exists(checkpoint_path):
-        tokenizer, start_batch = load_checkpoint(model, optimizer, checkpoint_path)
+        tokenizer, start_batch = load_checkpoint(model, optimizer, checkpoint_path, map_location=device)
         print(f"Loaded checkpoint from batch {start_batch}")
     else:
         start_batch = 0
@@ -79,6 +83,9 @@ if __name__ == '__main__':
                 break
 
             batch_x, batch_y = lm.batch_to_labeled_samples(batch)
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+
             logits = model(batch_x)
             loss = lm.compute_loss(logits, batch_y)
 
@@ -98,7 +105,12 @@ if __name__ == '__main__':
                 if num_batches % 2000 == 0:
                     for _ in range(1):
                         model.eval()
-                        sampled = tokenizer.detokenize(model.sample_continuation(tokenizer.tokenize("Hello"), 500))
+                        # Sampling: move input to device, output to cpu for detokenize
+                        sample_input = tokenizer.tokenize("Hello")
+                        sample_input = torch.tensor(sample_input, dtype=torch.long, device=device)
+                        sampled = model.sample_continuation(sample_input, 500)
+                        sampled = sampled.cpu().tolist()
+                        sampled_text = tokenizer.detokenize(sampled)
                         model.train()
-                        print(f"Model sample: '''{sampled}'''")
+                        print(f"Model sample: '''{sampled_text}'''")
                     print("")

@@ -3,7 +3,7 @@ import torch
 import os
 import pickle
 
-def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint.pth"):
+def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint_hebrew.pth"):
     torch.save({
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
@@ -12,7 +12,7 @@ def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint.p
     with open(path + ".tokenizer", "wb") as f:
         pickle.dump(tokenizer, f)
 
-def load_checkpoint(model, optimizer, path="checkpoint.pth"):
+def load_checkpoint(model, optimizer, path="checkpoint_hebrew.pth"):
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     seq_len = 128
     batch_size = 64
-    data_path = "data/"
+    data_path = "heb-data/"
     n_layers = 12
     n_heads = 12
     embed_size = 192
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, betas=[0.9, 0.95], weight_decay=0.01)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5000, gamma=0.5)  # Step down LR every 5000 batches
 
-    checkpoint_path = "checkpoint.pth"
+    checkpoint_path = "checkpoint_hebrew.pth"
     start_batch = 0
 
     if os.path.exists(checkpoint_path):

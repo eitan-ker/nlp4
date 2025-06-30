@@ -31,7 +31,10 @@ import torch.nn.functional as F
 
 def batch_to_labeled_samples(batch):
     # batch: list of token lists, each of length seq_len + 1
-    batch = torch.tensor(batch, dtype=torch.long)
+    if isinstance(batch, torch.Tensor):
+      batch = batch.detach().clone().long()
+    else:
+      batch = torch.tensor(batch, dtype=torch.long)
     batch_x = batch[:, :-1]  # input: all but last token
     batch_y = batch[:, 1:]   # target: all but first token
     return batch_x, batch_y
