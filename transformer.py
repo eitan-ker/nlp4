@@ -5,38 +5,38 @@ import attention
 import mlp
 
 class TransformerDecoderBlock(nn.Module):
-    def __init__(self, n_heads: int, embed_size: int, mlp_hidden_size: int, max_context_len, with_residuals: bool = False):
+    def __init__(self, n_heads: int, embed_size: int, mlp_hidden_size: int, max_context_len, with_residuals: bool = False, dropout: float = 0.0):
         super().__init__()
         self.causal_attention = attention.CausalSelfAttention(embed_size, n_heads, max_context_len)
-        self.mlp = mlp.MLP(embed_size, mlp_hidden_size)
+        self.mlp = mlp.MLP(embed_size, mlp_hidden_size, dropout=dropout)  # Pass dropout here
         self.layer_norm_1 = nn.LayerNorm(embed_size)
         self.layer_norm_2 = nn.LayerNorm(embed_size)
         self.with_residuals = with_residuals
+        self.dropout = nn.Dropout(dropout)
 
-    ### MODIFIED ###
-    # Implemented the forward pass with residual connections.
     def forward(self, inputs):
         if self.with_residuals:
             # First residual connection (Pre-Norm): LayerNorm -> Attention -> Add
-            x = inputs + self.causal_attention(self.layer_norm_1(inputs))
+            x = inputs + self.dropout(self.causal_attention(self.layer_norm_1(inputs)))
             # Second residual connection (Pre-Norm): LayerNorm -> MLP -> Add
-            x = x + self.mlp(self.layer_norm_2(x))
+            x = x + self.dropout(self.mlp(self.layer_norm_2(x)))
             return x
         else:
             # This block is not used when with_residuals=True
             x = inputs
-            x = self.causal_attention(self.layer_norm_1(x))
-            x = self.mlp(self.layer_norm_2(x))
+            x = self.dropout(self.causal_attention(self.layer_norm_1(x)))
+            x = self.dropout(self.mlp(self.layer_norm_2(x)))
             return x
 
 ### MODIFIED ###
 # Completed the entire Embed class.
 class Embed(nn.Module):
-    def __init__(self, vocab_size: int, embed_size: int, max_context_len):
+    def __init__(self, vocab_size: int, embed_size: int, max_context_len, dropout: float = 0.0):
         super().__init__()
         self.token_embeddings = nn.Embedding(vocab_size, embed_size)
         self.position_embeddings = nn.Embedding(max_context_len, embed_size)
         self.max_context_len = max_context_len
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         # x has the shape (b x n) where b is batch dimension and n is sequence length.
@@ -51,7 +51,7 @@ class Embed(nn.Module):
         pos_embeddings = self.position_embeddings(positions)
 
         # The final embedding is the sum of token and position embeddings
-        return tok_embeddings + pos_embeddings
+        return self.dropout(tok_embeddings + pos_embeddings)
 
 
 class TransformerLM(nn.Module):
@@ -64,10 +64,14 @@ class TransformerLM(nn.Module):
             vocab_size: int,
             mlp_hidden_size: int,
             with_residuals: bool,
+            dropout: float = 0.0,
             ):
         super().__init__()
-        self.embed = Embed(vocab_size, embed_size, max_context_len)
-        self.layers = nn.ModuleList([TransformerDecoderBlock(n_heads, embed_size, mlp_hidden_size, max_context_len, with_residuals) for _ in range(n_layers)])
+        self.embed = Embed(vocab_size, embed_size, max_context_len, dropout)
+        self.layers = nn.ModuleList([
+            TransformerDecoderBlock(n_heads, embed_size, mlp_hidden_size, max_context_len, with_residuals, dropout)
+            for _ in range(n_layers)
+        ])
         self.layer_norm = nn.LayerNorm(embed_size)
         self.word_prediction = nn.Linear(embed_size, vocab_size)
         self.max_context_len = max_context_len
