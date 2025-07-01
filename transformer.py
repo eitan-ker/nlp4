@@ -116,9 +116,23 @@ class TransformerLM(nn.Module):
         self.train() # Set model back to training mode
         return generated
 
-    def better_sample_continuation(self, prefix: list[int], max_tokens_to_generate: int, temperature: float, topK: int) -> list[int]:
-        raise Exception("Not implemented")
-        # TODO implement this.
-        # Temperature should be the temperature in which you sample.
-        # TopK indicates that we don't sample from the entire distribution, but only from the top k scoring tokens
-        # for the given position.
+    def better_sample_continuation(self, prefix, max_length, top_k=5, temperature=0):
+      device = next(self.parameters()).device
+      tokens = torch.tensor(prefix, dtype=torch.long, device=device).unsqueeze(0)
+      for _ in range(max_length):
+        # Truncate to last max_context_len tokens before passing to the model
+        if tokens.size(1) > self.max_context_len:
+          tokens = tokens[:, -self.max_context_len:]
+        logits = self(tokens)[:, -1, :]  # (1, vocab_size)
+        if temperature == 0:
+          # Greedy: pick the most likely token
+          next_token = torch.argmax(logits, dim=-1, keepdim=True)
+        else:
+          logits = logits / temperature
+          topk_logits, topk_indices = torch.topk(logits, top_k, dim=-1)
+          probs = F.softmax(topk_logits, dim=-1)
+          next_token = topk_indices.gather(
+            -1, torch.multinomial(probs, num_samples=1)
+          )
+        tokens = torch.cat([tokens, next_token], dim=1)
+      return tokens[0].tolist()

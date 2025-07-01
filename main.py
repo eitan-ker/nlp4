@@ -3,6 +3,8 @@ import torch
 import os
 import pickle
 
+# todo
+# def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint_hebrew.pth"):
 def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint.pth"):
     torch.save({
         "model_state": model.state_dict(),
@@ -12,6 +14,8 @@ def save_checkpoint(model, optimizer, tokenizer, num_batches, path="checkpoint.p
     with open(path + ".tokenizer", "wb") as f:
         pickle.dump(tokenizer, f)
 
+# todo
+# def load_checkpoint(model, optimizer, path="checkpoint_hebrew.pth"):
 def load_checkpoint(model, optimizer, path="checkpoint.pth"):
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint["model_state"])
@@ -31,6 +35,8 @@ if __name__ == '__main__':
 
     seq_len = 128
     batch_size = 64
+    # todo
+    # data_path = "heb-data/"
     data_path = "data/"
     n_layers = 6
     n_heads = 6
@@ -40,9 +46,12 @@ if __name__ == '__main__':
     learning_rate = 5e-4
     gradient_clipping = 1.0
 
-    num_batches_to_train = 50000
+    num_batches_to_train = 500000
 
     tokenizer, tokenized_data = data.load_data(data_path)
+    # tokenizer, tokenized_data = data.load_data_hebrew(data_path)
+    print(f"Loaded {len(tokenized_data)} tokenized items from {data_path}")
+    print("hello")
     data_iter = iter(data.RandomOrderDataIterator(tokenized_data, seq_len + 1))
 
     model: torch.nn.Module = TransformerLM(
@@ -57,6 +66,8 @@ if __name__ == '__main__':
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, betas=[0.9, 0.95])
 
+    # todo
+    # checkpoint_path = "checkpoint_hebrew.pth"
     checkpoint_path = "checkpoint.pth"
     start_batch = 0
 
@@ -74,6 +85,8 @@ if __name__ == '__main__':
             if num_batches >= num_batches_to_train:
                 break
 
+
+
             batch_x, batch_y = lm.batch_to_labeled_samples(batch)
             logits = model(batch_x)
             loss = lm.compute_loss(logits, batch_y)
@@ -89,12 +102,13 @@ if __name__ == '__main__':
                 save_checkpoint(model, optimizer, tokenizer, num_batches, checkpoint_path)
                 print(f"Checkpoint saved at batch {num_batches}")
 
-            if num_batches % 10 == 0:
+            if num_batches % 2 == 0:
                 print(f"Seen {num_batches} batches. last loss is: {loss.item()}")
-                if num_batches % 100 == 0:
+                if num_batches % 2 == 0:
                     for _ in range(1):
                         model.eval()
-                        sampled = tokenizer.detokenize(model.sample_continuation(tokenizer.tokenize("Hello"), 500))
+                        sampled = tokenizer.detokenize(
+                          model.better_sample_continuation(tokenizer.tokenize("Hello"), 500, top_k=5, temperature=0))
                         model.train()
                         print(f"Model sample: '''{sampled}'''")
                     print("")
