@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
             if num_batches % 200 == 0:
                 print(f"Seen {num_batches} batches. last loss is: {loss.item()}")
-                if num_batches % 2000 == 0:
+                if num_batches % 1000 == 0:
                     for _ in range(1):
                         model.eval()
                         # Sampling: move input to device, output to cpu for detokenize
