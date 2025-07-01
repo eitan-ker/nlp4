@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     seq_len = 128
     batch_size = 32
-    data_path = "data/"
+    data_path = "heb-data/"
     n_layers = 12
     n_heads = 12
     embed_size = 192
